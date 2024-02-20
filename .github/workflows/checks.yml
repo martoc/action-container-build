@@ -1,0 +1,19 @@
+---
+name: Action checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Validate YAML file
+        run: yamllint action.yml
