@@ -46,7 +46,7 @@ runs:
           ${BUILD_ARGS} \
           --tag ${NAMESPACE}/${NAME}:latest \
           --tag ${NAMESPACE}/${NAME}:${TAG_VERSION} .
-        docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}
+        echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin
         docker push \
           ${NAMESPACE}/${NAME}:${TAG_VERSION}
         docker push \
