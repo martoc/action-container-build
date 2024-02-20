@@ -48,5 +48,6 @@ runs:
           --tag ${NAMESPACE}/${NAME}:${TAG_VERSION} .
         docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}
         docker push \
-          ${NAMESPACE}/${NAME}:${TAG_VERSION} \
+          ${NAMESPACE}/${NAME}:${TAG_VERSION}
+        docker push \
           ${NAMESPACE}/${NAME}:latest
