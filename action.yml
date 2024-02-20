@@ -15,7 +15,7 @@ runs:
         NAME="${NAME#docker-}"
         NAMESPACE="${{ github.repository_owner }}"
         DESCRIPTION="${{ github.event.head_commit.message }}"
-        BUILD_ARGS="--build-arg TAG_VERSION=${TAG_VERSION} --build-arg BUILD_SHA=${GITHUB_SHA}"
+        BUILD_ARGS=""
         label_args=(
           --label "org.label-schema.name=${NAME}"
           --label "org.label-schema.schema-version=1.0"
@@ -38,6 +38,13 @@ runs:
           --label "org.opencontainers.image.authors=${GITHUB_ACTOR}"
           --label "org.opencontainers.image.licenses=“Copyright (c) $(date -u +'%Y') martoc"
         )
-        docker build "${label_args[@]}" ${BUILD_ARGS} --tag ${NAMESPACE}/${NAME}:latest --tag ${NAMESPACE}/${NAME}:${TAG_VERSION} .
+        docker build "${label_args[@]}" \
+          --build-arg VERSION=${TAG_VERSION} \
+          --build-arg BUILD_SHA=${BUILD_SHA} \
+          --build-arg OS=linux \
+          --build-arg arch=amd64 \
+          ${BUILD_ARGS} \
+          --tag ${NAMESPACE}/${NAME}:latest \
+          --tag ${NAMESPACE}/${NAME}:${TAG_VERSION} .
         docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
         docker push ${NAMESPACE}/${NAME}:${TAG_VERSION}
