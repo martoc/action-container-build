@@ -39,7 +39,7 @@ runs:
           --label "org.opencontainers.image.licenses=“Copyright (c) $(date -u +'%Y') martoc"
         )
         docker build "${label_args[@]}" \
-          --build-arg VERSION=${TAG_VERSION} \
+          --build-arg TAG_VERSION=${TAG_VERSION} \
           --build-arg BUILD_SHA=${BUILD_SHA} \
           --build-arg OS=linux \
           --build-arg arch=amd64 \
