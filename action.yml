@@ -40,6 +40,6 @@ runs:
           --label "org.opencontainers.image.authors=${GITHUB_ACTOR}"
           --label "org.opencontainers.image.licenses=“${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG_NAME}/LICENSE"
         )
-        docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+        docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
         docker buildx create --use
         docker buildx build --push "${LABEL_ARGS[@]}" ${BUILD_ARGS} --no-cache --progress plain --file ${DOCKERFILE} --platform $PLATFORMS --tag ${NAMESPACE}/${NAME}:${TAG_VERSION} --tag ${NAMESPACE}/${NAME}:latest $WORKDIR
