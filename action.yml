@@ -17,6 +17,10 @@ runs:
         WORKDIR="."
         NAMESPACE="${{ github.repository_owner }}"
         DESCRIPTION="${{ github.event.head_commit.message }}"
+        cat <<EOF > /tmp/commit-message.txt
+        ${{ github.event.head_commit.message }}
+        EOF
+        DESCRIPTION=$(cat /tmp/commit-message.txt | head -n 1)
         BUILD_ARGS="--build-arg TAG_VERSION=${TAG_VERSION} --build-arg BUILD_SHA=${GITHUB_SHA}"
         LABEL_ARGS=(
           --label "org.label-schema.name=${NAME}"
