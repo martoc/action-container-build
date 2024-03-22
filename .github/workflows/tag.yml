@@ -13,5 +13,5 @@ jobs:
   github-actions:
     permissions:
       contents: write
-    uses: martoc/workflow-github-actions/.github/workflows/github-actions.yml@main
+    uses: martoc/workflow-github-actions/.github/workflows/github-actions.yml@v0
     secrets: inherit
