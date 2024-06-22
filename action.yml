@@ -32,7 +32,7 @@ runs:
         if [ -z "${DESCRIPTION}" ]; then
           cat <<EOF > /tmp/commit-message.txt
           ${{ github.event.head_commit.message }}
-          EOF
+        EOF
           DESCRIPTION=$(cat /tmp/commit-message.txt | head -n 1)
         fi
 
