@@ -1,2 +1,2 @@
 # Use for the integration tests
-FROM scratch
+FROM alpine:3
