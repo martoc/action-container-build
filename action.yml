@@ -12,12 +12,16 @@ inputs:
     description: 'Region to push the container to valid values: google cloud or aws regions'
     required: false
     default: ''
-  gcp_project_id:
-    description: 'Google Cloud Project ID'
+  repository_name:
+    description: 'AWS Repository Name'
     required: false
     default: ''
-  gcp_repository_name:
-    description: 'Google Cloud Repository Name'
+  aws_account_id:
+    description: 'AWS Account ID'
+    required: false
+    default: ''
+  gcp_project_id:
+    description: 'Google Cloud Project ID'
     required: false
     default: ''
 runs:
@@ -26,6 +30,11 @@ runs:
     - name: Container Build
       shell: bash
       run: |
+        if [ -z "${TAG_VERSION}" ]; then
+          echo "TAG_VERSION must be set"
+          exit 1
+        fi
+
         NAME="${{ github.repository }}"
         NAME="${NAME#*/}"
         NAME="${NAME#docker-}"
@@ -42,6 +51,7 @@ runs:
            WORKDIR="."
         fi
 
+        # Deprecated in favor of repository_name here for backwards compatibility
         if [ -z "${NAMESPACE}" ]; then
           NAMESPACE="${{ github.repository_owner }}"
         fi
@@ -77,20 +87,24 @@ runs:
           --label "org.opencontainers.image.licenses=“${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG_NAME}/LICENSE"
         )
 
-        if [ -z "${REGISTRY}" ]; then
+        if [ -n "${{ inputs.registry }}" ]; then
           REGISTRY="${{ inputs.registry }}"
         fi
 
-        if [ -z "${REGION}" ]; then
+        if [ -n "${{ inputs.region }}" ]; then
           REGION="${{ inputs.region }}"
         fi
 
-        if [ -z "${GCP_PROJECT_ID}" ]; then
+        if [ -n "${{ inputs.repository_name }}" ]; then
+          REPOSITORY_NAME="${{ inputs.repository_name }}"
+        fi
+
+        if [ -n "${{ inputs.gcp_project_id }}" ]; then
           GCP_PROJECT_ID="${{ inputs.gcp_project_id }}"
         fi
 
-        if [ -z "${GCP_REPOSITORY_NAME}" ]; then
-          GCP_REPOSITORY_NAME="${{ inputs.gcp_repository_name }}"
+        if [ -n "${{ inputs.aws_account_id }}" ]; then
+          ACCOUNT_ID="${{ inputs.aws_account_id }}"
         fi
 
         if [ "${REGISTRY}" = "docker.io" ]; then
@@ -98,8 +112,15 @@ runs:
             echo "DOCKER_USERNAME and DOCKER_PASSWORD must be set when using docker.io registry"
             exit 1
           fi
+          if [ -z "${REPOSITORY_NAME}" ]; then
+            REPOSITORY_NAME="${NAMESPACE}"
+          fi
+          if [ -z "${REPOSITORY_NAME}" ]; then
+            echo "REPOSITORY_NAME envar or repository_name input must be set when using docker.io registry"
+            exit 1
+          fi
           docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
-          TAGS="--tag ${NAMESPACE}/${NAME}:${TAG_VERSION} --tag ${NAMESPACE}/${NAME}:latest"
+          TAGS="--tag ${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag ${REPOSITORY_NAME}/${NAME}:latest"
         else
           if [ "${REGISTRY}" = "gcp" ]; then
             if [ -z "${REGION}" ]; then
@@ -110,12 +131,28 @@ runs:
               echo "GCP_PROJECT_ID must be set when using 'gcp' registry"
               exit 1
             fi
-            if  [ -z "${GCP_REPOSITORY_NAME}" ]; then
-              echo "GCP_REPOSITORY_NAME must be set when using 'gcp' registry"
+            if  [ -z "${REPOSITORY_NAME}" ]; then
+              echo "REPOSITORY_NAME must be set when using 'gcp' registry"
               exit 1
             fi
             gcloud auth configure-docker --quiet ${REGION}-docker.pkg.dev
-            TAGS="--tag ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY_NAME}/${NAME}:latest"
+            TAGS="--tag ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:latest"
+          else
+            if [ "${REGISTRY}" = "aws" ]; then
+              if [ -z "${REGION}" ]; then
+                echo "REGION must be set when using 'aws' registry"
+                exit 1
+              fi
+              if  [ -z "${REPOSITORY_NAME}" ]; then
+                echo "REPOSITORY_NAME must be set when using 'aws' registry"
+                exit 1
+              fi
+              docker login --username AWS --password $(aws ecr get-login-password --region $REGION) $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+              TAGS="--tag $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:latest"
+            else
+              echo "Unknown registry: ${REGISTRY}, valid values are docker.io, gcp, aws"
+              exit 1
+            fi
           fi
         fi
         docker buildx create --use
