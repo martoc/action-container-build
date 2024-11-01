@@ -10,7 +10,7 @@
       - main
 
   jobs:
-    docker.io:
+    docker:
       runs-on: ubuntu-20.44
       steps:
       - uses: actions/checkout@v4
