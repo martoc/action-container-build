@@ -3,6 +3,23 @@ name: "Build a container with Docker"
 description: |
   This action builds a container with Docker and pushes it to a registry.
 author: martoc
+inputs:
+  registry:
+    description: 'Registry to push the container to (default: docker.io) valid values: docker.io, gcp, aws'
+    required: false
+    default: 'docker.io'
+  region:
+    description: 'Region to push the container to valid values: google cloud or aws regions'
+    required: false
+    default: ''
+  gcp_project_id:
+    description: 'Google Cloud Project ID'
+    required: false
+    default: ''
+  gcp_repository_name:
+    description: 'Google Cloud Repository Name'
+    required: false
+    default: ''
 runs:
   using: "composite"
   steps:
@@ -59,6 +76,47 @@ runs:
           --label "org.opencontainers.image.authors=${GITHUB_ACTOR}"
           --label "org.opencontainers.image.licenses=“${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG_NAME}/LICENSE"
         )
-        docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
+
+        if [ -z "${REGISTRY}" ]; then
+          REGISTRY="${{ inputs.registry }}"
+        fi
+
+        if [ -z "${REGION}" ]; then
+          REGION="${{ inputs.region }}"
+        fi
+
+        if [ -z "${GCP_PROJECT_ID}" ]; then
+          GCP_PROJECT_ID="${{ inputs.gcp_project_id }}"
+        fi
+
+        if [ -z "${GCP_REPOSITORY_NAME}" ]; then
+          GCP_REPOSITORY_NAME="${{ inputs.gcp_repository_name }}"
+        fi
+
+        if [ "${REGISTRY}" = "docker.io" ]; then
+          if [ -z "${DOCKER_USERNAME}" ] || [ -z "${DOCKER_PASSWORD}" ]; then
+            echo "DOCKER_USERNAME and DOCKER_PASSWORD must be set when using docker.io registry"
+            exit 1
+          fi
+          docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
+          TAGS="--tag ${NAMESPACE}/${NAME}:${TAG_VERSION} --tag ${NAMESPACE}/${NAME}:latest"
+        else
+          if [ "${REGISTRY}" = "gcp" ]; then
+            if [ -z "${REGION}" ]; then
+              echo "REGION must be set when using 'gcp' registry"
+              exit 1
+            fi
+            if  [ -z "${GCP_PROJECT_ID}" ]; then
+              echo "GCP_PROJECT_ID must be set when using 'gcp' registry"
+              exit 1
+            fi
+            if  [ -z "${GCP_REPOSITORY_NAME}" ]; then
+              echo "GCP_REPOSITORY_NAME must be set when using 'gcp' registry"
+              exit 1
+            fi
+            gcloud auth configure-docker --quiet ${REGION}-docker.pkg.dev
+            TAGS="--tag ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_REPOSITORY_NAME}/${NAME}:latest"
+          fi
+        fi
         docker buildx create --use
-        docker buildx build --push "${LABEL_ARGS[@]}" ${BUILD_ARGS} --no-cache --progress plain --file ${DOCKERFILE} --platform $PLATFORMS --tag ${NAMESPACE}/${NAME}:${TAG_VERSION} --tag ${NAMESPACE}/${NAME}:latest $WORKDIR
+        docker buildx build --push "${LABEL_ARGS[@]}" ${BUILD_ARGS} --no-cache --progress plain --file ${DOCKERFILE} --platform $PLATFORMS $TAGS $WORKDIR
