@@ -11,7 +11,7 @@
 
   jobs:
     docker:
-      runs-on: ubuntu-20.44
+      runs-on: ubuntu-20.04
       steps:
       - uses: actions/checkout@v4
         with:
@@ -23,7 +23,7 @@
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
     aws:
-      runs-on: ubuntu-20.44
+      runs-on: ubuntu-20.04
       steps:
       - uses: actions/checkout@v4
         with:
@@ -43,7 +43,7 @@
           repository_name: action-container-build
           aws_account_id: 637423379760
     gcp:
-      runs-on: ubuntu-20.44
+      runs-on: ubuntu-20.04
       steps:
       - uses: actions/checkout@v4
         with:
