@@ -11,6 +11,8 @@
 
   jobs:
     docker:
+      permissions:
+        contents: write
       runs-on: ubuntu-20.04
       steps:
       - uses: actions/checkout@v4
@@ -23,6 +25,8 @@
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
     aws:
+      permissions:
+        contents: write
       runs-on: ubuntu-20.04
       steps:
       - uses: actions/checkout@v4
@@ -43,6 +47,8 @@
           repository_name: action-container-build
           aws_account_id: 637423379760
     gcp:
+      permissions:
+        contents: write
       runs-on: ubuntu-20.04
       steps:
       - uses: actions/checkout@v4
