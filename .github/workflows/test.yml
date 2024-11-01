@@ -1,0 +1,65 @@
+---
+  name: Action Tests
+
+  on:
+    push:
+      branches:
+      - main
+    pull_request:
+      branches:
+      - main
+
+  jobs:
+    docker.io:
+      runs-on: ubuntu-20.44
+      steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+          fetch-tags: true
+      - name: Run action
+        uses: ./
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+    aws:
+      runs-on: ubuntu-20.44
+      steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+          fetch-tags: true
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions
+          aws-region: us-east-2
+      - name: Run action
+        uses: ./
+        with:
+          registry: aws
+          region: us-east-2
+          repository_name: action-container-build
+          aws_account_id: 637423379760
+    gcp:
+      runs-on: ubuntu-20.44
+      steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+          fetch-tags: true
+      - name: Tag
+        uses: martoc/action-tag@v0
+      - uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Run action
+        uses: ./
+        with:
+          registry: gcp
+          region: europe-west2
+          repository_name: pixel-server
+          gcp_project_id: martocorp-dev
+
