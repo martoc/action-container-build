@@ -50,7 +50,7 @@
         with:
           registry: aws
           region: us-east-2
-          repository_name: action-container-build
+          repository_name: martoc
           aws_account_id: 637423379760
     gcp:
       permissions:
