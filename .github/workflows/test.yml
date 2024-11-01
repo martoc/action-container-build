@@ -37,6 +37,8 @@
         with:
           fetch-depth: 50
           fetch-tags: true
+      - name: Tag
+        uses: martoc/action-tag@v0
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
