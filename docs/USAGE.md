@@ -88,8 +88,8 @@ jobs:
         with:
           registry: aws
           region: us-east-2
-          repository_name: martoc
-          aws_account_id: 637423379760
+          repository_name: repo
+          aws_account_id: 123456789012
 
   gcp:
     permissions:
