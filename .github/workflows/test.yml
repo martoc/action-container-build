@@ -24,7 +24,7 @@
         uses: martoc/action-tag@v0
         with:
           skip-push: true
-      - name: Run action
+      - name: Build & Push Container Image
         uses: ./
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -49,7 +49,7 @@
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-session-name: github-actions
           aws-region: us-east-2
-      - name: Run action
+      - name: Build & Push Container Image
         uses: ./
         with:
           registry: aws
@@ -74,7 +74,7 @@
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-      - name: Run action
+      - name: Build & Push Container Image
         uses: ./
         with:
           registry: gcp
