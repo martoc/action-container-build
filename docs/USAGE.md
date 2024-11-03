@@ -34,7 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+          fetch-tags: true
 
       - name: Tag
         uses: martoc/action-tag@v0
@@ -65,7 +68,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+          fetch-tags: true
 
       - name: Tag
         uses: martoc/action-tag@v0
