@@ -1,102 +1,140 @@
-# Usage 
-
-This USAGE.md file describes how to utilise the `martoc/action-tag` GitHub Action, 
-which automatically tags your repository based on the commit messages, 
-following the Conventional Commits specification.
+# Usage
 
 ## Overview
 
-The `martoc/action-tag action` is used to calculate and apply semantic version tags to your GitHub repository. 
-This versioning follows the Conventional Commits specification, 
-making it easier to maintain an organised and predictable version history.
+This GitHub Action is designed to build and push container images to Docker Hub, 
+AWS Elastic Container Registry (ECR), and Google Container Registry (GCR). 
+It simplifies the CI/CD workflow by automating the process of tagging, building, 
+and pushing container images across multiple container registries.
 
 ## Prerequisites
 
-* Ensure your project utilises the Conventional Commits format. The versioning follows the rules of semantic versioning, incrementing:
-* `MAJOR` version when a breaking change is introduced.
-* `MINOR` version when a new feature is added that is backward-compatible.
-* `PATCH` version for backward-compatible bug fixes.
+Secrets Configuration
 
-## Basic Usage
+Before using this action, ensure that you have the following secrets configured in your GitHub repository:
 
-Below is an example of how to use martoc/action-tag in your GitHub Actions workflow:
+### Docker Hub
+
+* **DOCKER_USERNAME:** Your Docker Hub username.
+* **DOCKER_PASSWORD:** Your Docker Hub password or personal access token.
+
+### AWS ECR
+
+* **AWS_ROLE_TO_ASSUME:** The ARN of the AWS role to assume for authentication.
+
+### GCP GCR
+
+* **GCP_WORKLOAD_IDENTITY_PROVIDER:** Workload identity provider for GCP authentication.
+* **GCP_SERVICE_ACCOUNT:** The email of the service account to use for GCP authentication.
+
+## Example
+
+Here are examples of how to use this GitHub Action to build and push container images to Docker Hub, AWS ECR, and GCP GCR.
 
 ```yaml
-name: Tagging Workflow
+name: Integration Tests
 
 on:
   push:
     branches:
       - main
-
-jobs:
-  tag:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 10
-          fetch-tags: true
-
-      - name: Tag
-        uses: martoc/action-tag@v0
-```
-
-### Explanation
-
-* The Tagging Workflow is triggered on every push to the main branch.
-* The actions/checkout step ensures the repository’s content is checked out so the action can access the commit history.
-* The martoc/action-tag@v0 step calculates the semantic version based on the latest commit message and prepares to apply a new tag.
-
-## Optional: Skip Pushing the Tag to the Repository
-
-By default, the action is configured to calculate the semantic version and push the tag to the repository. However, 
-you can prevent the action from updating the repository by using the skip-push option.
-
-Usage with skip-push
-```yaml
-name: Tagging Workflow (Skip Push)
-
-on:
-  push:
+  pull_request:
     branches:
       - main
 
 jobs:
-  tag:
-    runs-on: ubuntu-latest
+  docker:
+    permissions:
+      contents: write
+      id-token: write
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 10
+          fetch-depth: 50
           fetch-tags: true
-
       - name: Tag
         uses: martoc/action-tag@v0
         with:
           skip-push: true
+      - name: Build & Push Container Image
+        uses: ./
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+  aws:
+    permissions:
+      contents: write
+      id-token: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+          fetch-tags: true
+      - name: Tag
+        uses: martoc/action-tag@v0
+        with:
+          skip-push: true
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions
+          aws-region: us-east-2
+      - name: Build & Push Container Image
+        uses: ./
+        with:
+          registry: aws
+          region: us-east-2
+          repository_name: martoc
+          aws_account_id: 637423379760
+
+  gcp:
+    permissions:
+      contents: write
+      id-token: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+          fetch-tags: true
+      - name: Tag
+        uses: martoc/action-tag@v0
+        with:
+          skip-push: true
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Build & Push Container Image
+        uses: ./
+        with:
+          registry: gcp
+          region: europe-west2
+          repository_name: repository
+          gcp_project_id: project-id
 ```
-### Explanation
 
-* **skip-push:** true prevents the new tag from being pushed to the repository,
-making the action only calculate the tag version without updating the repository.
+### Inputs
 
-## Configuration Options
+#### Docker Hub
 
-* **skip-push:** (Optional) When set to true, the action calculates the version tag but does not push it to the repository.
-Default is `false`.
+* DOCKER_USERNAME (required): Your Docker Hub username.
+* DOCKER_PASSWORD (required): Your Docker Hub password or access token.
 
-## Troubleshooting
+#### AWS
 
-If the action does not behave as expected:
+* **registry:** Set to `aws` when pushing to AWS ECR.
+* **region (required for AWS):** The AWS region for the ECR registry.
+* **repository_name (required for AWS):** The name of the ECR repository.
+* **aws_account_id (required for AWS):** Your AWS account ID.
 
-* Verify that your commit messages follow the Conventional Commits format.
-* Check the action logs for detailed error information.
-* Ensure that skip-push is set correctly based on whether you want to push tags or not.
+#### GCP
 
-## Additional Resources
-
-* [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
-* [Semantic Versioning](https://semver.org/)
+* **registry:** Set to `gcp` when pushing to GCP GCR.
+* **region (required for GCP):** The region for the GCR registry.
+* **repository_name (required for GCP):** The name of the GCR repository.
+* **gcp_project_id (required for GCP):** Your GCP project ID.
