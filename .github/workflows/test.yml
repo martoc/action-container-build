@@ -1,5 +1,5 @@
 ---
-  name: Action Tests
+  name: Integration tests
 
   on:
     push:
@@ -22,6 +22,8 @@
           fetch-tags: true
       - name: Tag
         uses: martoc/action-tag@v0
+        with:
+          skip-push: true
       - name: Run action
         uses: ./
         env:
@@ -39,6 +41,8 @@
           fetch-tags: true
       - name: Tag
         uses: martoc/action-tag@v0
+        with:
+          skip-push: true
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -64,6 +68,8 @@
           fetch-tags: true
       - name: Tag
         uses: martoc/action-tag@v0
+        with:
+          skip-push: true
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
