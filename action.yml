@@ -13,7 +13,7 @@ inputs:
     required: false
     default: ''
   repository_name:
-    description: 'AWS Repository Name'
+    description: 'Repository Name'
     required: false
     default: ''
   aws_account_id:
