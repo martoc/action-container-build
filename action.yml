@@ -24,6 +24,10 @@ inputs:
     description: 'Google Cloud Project ID'
     required: false
     default: ''
+  platforms:
+    description: 'Platforms to build for'
+    required: false
+    default: 'linux/arm64,linux/amd64'
 runs:
   using: "composite"
   steps:
@@ -45,7 +49,7 @@ runs:
         NAME="${NAME#docker-}"
 
         if [ -z "${PLATFORMS}" ]; then
-          PLATFORMS="linux/arm64,linux/amd64"
+          PLATFORMS="${{ inputs.platforms }}"
         fi
 
         if [ -z "${DOCKERFILE}" ]; then
