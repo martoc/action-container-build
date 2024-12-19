@@ -47,6 +47,7 @@ runs:
         NAME="${{ github.repository }}"
         NAME="${NAME#*/}"
         NAME="${NAME#docker-}"
+        NAME="${NAME#container-}"
 
         if [ -z "${PLATFORMS}" ]; then
           PLATFORMS="${{ inputs.platforms }}"
