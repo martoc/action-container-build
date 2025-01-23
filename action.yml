@@ -67,10 +67,7 @@ runs:
         fi
 
         if [ -z "${DESCRIPTION}" ]; then
-          cat <<EOF > /tmp/commit-message.txt
-          ${{ github.event.head_commit.message }}
-        EOF
-          DESCRIPTION=$(cat /tmp/commit-message.txt | head -n 1)
+          DESCRIPTION=$(echo "${{ github.event.head_commit.message }}" | head -n 1)
         fi
 
         BUILD_ARGS="--build-arg TAG_VERSION=${TAG_VERSION} --build-arg BUILD_SHA=${GITHUB_SHA}"
@@ -94,7 +91,7 @@ runs:
           --label "org.opencontainers.image.documentation=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG_NAME}/docs/index.md"
           --label "org.opencontainers.image.description=${DESCRIPTION}"
           --label "org.opencontainers.image.authors=${GITHUB_ACTOR}"
-          --label "org.opencontainers.image.licenses=“${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG_NAME}/LICENSE"
+          --label "org.opencontainers.image.licenses=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG_NAME}/LICENSE"
         )
 
         if [ -n "${{ inputs.registry }}" ]; then
@@ -131,6 +128,7 @@ runs:
           fi
           docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
           TAGS="--tag ${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag ${REPOSITORY_NAME}/${NAME}:latest"
+          PUSH_TAGS="${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} ${REPOSITORY_NAME}/${NAME}:latest"
         else
           if [ "${REGISTRY}" = "gcp" ]; then
             if [ -z "${REGION}" ]; then
@@ -147,6 +145,7 @@ runs:
             fi
             gcloud auth configure-docker --quiet ${REGION}-docker.pkg.dev
             TAGS="--tag ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:latest"
+            PUSH_TAGS="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:latest"
           else
             if [ "${REGISTRY}" = "aws" ]; then
               if [ -z "${REGION}" ]; then
@@ -159,11 +158,38 @@ runs:
               fi
               docker login --username AWS --password $(aws ecr get-login-password --region $REGION) $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
               TAGS="--tag $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:latest"
+              PUSH_TAGS="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:latest"
             else
-              echo "Unknown registry: ${REGISTRY}, valid values are docker.io, gcp, aws"
+              echo "Unknown registry: ${REGISTRY}. Valid values are:"
+              echo "  - docker.io"
+              echo "  - gcp"
+              echo "  - aws"
               exit 1
             fi
           fi
         fi
-        docker buildx create --use
-        docker buildx build --push "${LABEL_ARGS[@]}" ${BUILD_ARGS} --no-cache --progress plain --file ${DOCKERFILE} --platform $PLATFORMS $TAGS $WORKDIR
+        MULTI_PLATFORM="yes"
+        if [[ "$PLATFORMS" == *","* ]]; then
+          MULTI_PLATFORM="yes"
+        else
+          TARGET_OS=$(echo "$PLATFORMS" | cut -d'/' -f1)
+          TARGET_ARCH=$(echo "$PLATFORMS" | cut -d'/' -f2)
+          CURRENT_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          CURRENT_ARCH=$(uname -m)
+          case $CURRENT_ARCH in
+            x86_64) CURRENT_ARCH="amd64" ;;
+            aarch64) CURRENT_ARCH="arm64" ;;
+            i386|i686) CURRENT_ARCH="386" ;;
+          esac
+          if [ "$TARGET_OS" == "$CURRENT_OS" ] && [ "$TARGET_ARCH" == "$CURRENT_ARCH" ]; then
+            MULTI_PLATFORM="no"
+          fi
+        fi
+
+        if [ "$MULTI_PLATFORM" = "yes" ]; then
+          docker buildx create --use
+          docker buildx build --push "${LABEL_ARGS[@]}" ${BUILD_ARGS} --progress plain --file ${DOCKERFILE} --platform $PLATFORMS $TAGS $WORKDIR
+        else
+          docker build --no-cache "${LABEL_ARGS[@]}" ${BUILD_ARGS} --file ${DOCKERFILE} $TAGS $WORKDIR
+          docker push $PUSH_TAGS
+        fi
