@@ -128,7 +128,7 @@ runs:
           fi
           docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
           TAGS="--tag ${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag ${REPOSITORY_NAME}/${NAME}:latest"
-          PUSH_TAGS="${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} ${REPOSITORY_NAME}/${NAME}:latest"
+          PUSH_TAGS=(${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} ${REPOSITORY_NAME}/${NAME}:latest)
         else
           if [ "${REGISTRY}" = "gcp" ]; then
             if [ -z "${REGION}" ]; then
@@ -145,7 +145,7 @@ runs:
             fi
             gcloud auth configure-docker --quiet ${REGION}-docker.pkg.dev
             TAGS="--tag ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:latest"
-            PUSH_TAGS="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:latest"
+            PUSH_TAGS=(${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} ${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_NAME}/${NAME}:latest)
           else
             if [ "${REGISTRY}" = "aws" ]; then
               if [ -z "${REGION}" ]; then
@@ -158,7 +158,7 @@ runs:
               fi
               docker login --username AWS --password $(aws ecr get-login-password --region $REGION) $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
               TAGS="--tag $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:latest"
-              PUSH_TAGS="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:latest"
+              PUSH_TAGS=($ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:latest)
             else
               echo "Unknown registry: ${REGISTRY}. Valid values are:"
               echo "  - docker.io"
@@ -191,5 +191,7 @@ runs:
           docker buildx build --push "${LABEL_ARGS[@]}" ${BUILD_ARGS} --progress plain --file ${DOCKERFILE} --platform $PLATFORMS $TAGS $WORKDIR
         else
           docker build --no-cache "${LABEL_ARGS[@]}" ${BUILD_ARGS} --file ${DOCKERFILE} $TAGS $WORKDIR
-          docker push $PUSH_TAGS
+          for IMAGE_TAG in $PUSH_TAGS; do
+            docker push $IMAGE_TAG
+          done
         fi
