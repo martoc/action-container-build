@@ -28,6 +28,10 @@ inputs:
     description: "Platforms to build for"
     required: false
     default: "linux/arm64,linux/amd64"
+  build_args:
+    description: "Build arguments"
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -188,9 +192,9 @@ runs:
 
         if [ "$MULTI_PLATFORM" = "yes" ]; then
           docker buildx create --use
-          docker buildx build --push "${LABEL_ARGS[@]}" ${BUILD_ARGS} --progress plain --file ${DOCKERFILE} --platform $PLATFORMS $TAGS $WORKDIR
+          docker buildx build --push "${LABEL_ARGS[@]}" ${BUILD_ARGS} ${{ inputs.build_args }} --progress plain --file ${DOCKERFILE} --platform $PLATFORMS $TAGS $WORKDIR
         else
-          docker build --no-cache "${LABEL_ARGS[@]}" ${BUILD_ARGS} --file ${DOCKERFILE} $TAGS $WORKDIR
+          docker build --no-cache "${LABEL_ARGS[@]}" ${BUILD_ARGS} ${{ inputs.build_args }} --file ${DOCKERFILE} $TAGS $WORKDIR
           for IMAGE_TAG in $PUSH_TAGS; do
             docker push $IMAGE_TAG
           done
