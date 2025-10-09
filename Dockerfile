@@ -1,2 +1,2 @@
 # Use for the integration tests
-FROM alpine:3.21.3
+FROM alpine:3.22.2
