@@ -2,5 +2,3 @@
 
 * [Code Style](./CODESTYLE.md)
 * [Usage](./USAGE.md)
-
-
