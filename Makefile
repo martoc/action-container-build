@@ -1,4 +1,4 @@
-.PHONY: help lint lint-yaml lint-markdown lint-all clean install-tools check
+.PHONY: help lint lint-yaml lint-markdown lint-all clean init check
 
 # Default target
 help:
@@ -12,7 +12,7 @@ help:
 	@echo "  clean          - Clean temporary files"
 
 # Install development tools
-install-tools:
+init:
 	@echo "Installing development tools..."
 	@command -v yamllint >/dev/null 2>&1 || pip install yamllint
 	@command -v markdownlint >/dev/null 2>&1 || npm install -g markdownlint-cli
@@ -29,7 +29,7 @@ lint-markdown:
 	markdownlint '**/*.md' --ignore node_modules || true
 
 # Run all linters
-lint: lint-yaml
+lint: lint-yaml lint-markdown
 
 # Alias for lint
 check: lint
