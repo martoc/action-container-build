@@ -79,7 +79,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 50
           fetch-tags: true
@@ -99,7 +99,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 50
           fetch-tags: true
@@ -127,7 +127,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 50
           fetch-tags: true
@@ -153,7 +153,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 50
           fetch-tags: true
@@ -175,7 +175,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 50
           fetch-tags: true
