@@ -156,11 +156,19 @@ runs:
                 echo "REGION must be set when using 'aws' registry"
                 exit 1
               fi
+              if  [ -z "${ACCOUNT_ID}" ]; then
+                echo "ACCOUNT_ID must be set when using 'aws' registry, use aws_account_id input or ACCOUNT_ID envar"
+                exit 1
+              fi
+              if ! echo "${ACCOUNT_ID}" | grep -qE '^[0-9]{12}$'; then
+                echo "ACCOUNT_ID must be a 12-digit AWS account ID, got: ${ACCOUNT_ID}"
+                exit 1
+              fi
               if  [ -z "${REPOSITORY_NAME}" ]; then
                 echo "REPOSITORY_NAME must be set when using 'aws' registry"
                 exit 1
               fi
-              docker login --username AWS --password $(aws ecr get-login-password --region $REGION) $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+              aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
               TAGS="--tag $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:latest"
               PUSH_TAGS=($ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:latest)
             else
