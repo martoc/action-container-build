@@ -10,8 +10,11 @@ A GitHub Action that builds and pushes container images to Docker Hub, AWS ECR, 
 - Multi-platform builds using Docker buildx
 - Automatic OCI-compliant container labelling
 - Configurable build arguments and platforms
+- Reusable workflow for AWS ECR builds
 
 ## Quick Start
+
+### Docker Hub (Action)
 
 ```yaml
 - name: Build & Push Container Image
@@ -19,6 +22,20 @@ A GitHub Action that builds and pushes container images to Docker Hub, AWS ECR, 
   env:
     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+```
+
+### AWS ECR (Reusable Workflow)
+
+```yaml
+jobs:
+  build:
+    uses: martoc/action-container-build/.github/workflows/aws.yml@v0
+    with:
+      region: us-east-2
+      repository_name: my-repo
+      aws_account_id: "123456789012"
+    secrets:
+      aws_role_to_assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
 ```
 
 ## Documentation

@@ -215,6 +215,70 @@ jobs:
 * `gcp_project_id` input is required
 * GCP authentication must be configured (e.g., using `google-github-actions/auth`)
 
+## Reusable Workflows
+
+### AWS ECR (`aws.yml`)
+
+A reusable workflow that handles the full AWS ECR build pipeline, including
+credential configuration via OIDC, tagging, and building/pushing the container image.
+
+#### Inputs
+
+| Input | Description | Required | Default |
+|-------|-------------|----------|---------|
+| `region` | AWS region for ECR (e.g., `us-east-2`, `eu-west-1`) | Yes | - |
+| `repository_name` | ECR repository name | Yes | - |
+| `aws_account_id` | AWS Account ID (12-digit) | Yes | - |
+| `platforms` | Platforms to build for | No | `linux/arm64,linux/amd64` |
+| `build_args` | Additional build arguments | No | `""` |
+| `runner` | GitHub Actions runner to use | No | `ubuntu-24.04` |
+
+#### Secrets
+
+| Secret | Description | Required |
+|--------|-------------|----------|
+| `aws_role_to_assume` | ARN of the AWS IAM role to assume via OIDC | Yes |
+
+#### Example
+
+```yaml
+name: Build Container
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    uses: martoc/action-container-build/.github/workflows/aws.yml@v0
+    with:
+      region: us-east-2
+      repository_name: my-repo
+      aws_account_id: "123456789012"
+    secrets:
+      aws_role_to_assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+```
+
+#### Custom Platform Example
+
+```yaml
+jobs:
+  build:
+    uses: martoc/action-container-build/.github/workflows/aws.yml@v0
+    with:
+      region: eu-west-1
+      repository_name: my-repo
+      aws_account_id: "123456789012"
+      platforms: linux/arm64
+      build_args: --build-arg ENV=production
+    secrets:
+      aws_role_to_assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+```
+
 ## Container Labels
 
 The action automatically adds the following labels to the container image:
