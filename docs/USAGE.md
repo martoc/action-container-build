@@ -40,6 +40,7 @@ Before using this action, ensure that you have the following secrets configured 
 | `gcp_project_id` | Google Cloud Project ID | No | `""` |
 | `platforms` | Platforms to build for (e.g., `linux/amd64`, `linux/arm64`) | No | `linux/arm64,linux/amd64` |
 | `build_args` | Additional build arguments to pass to docker build | No | `""` |
+| `mode` | Build mode: `build` (default), `multi-arch` (native single-arch build with arch-suffixed tag), `manifest` (create manifest list from arch-suffixed images). `multi-arch` and `manifest` are AWS ECR only. | No | `"build"` |
 
 ### Environment Variables
 
@@ -190,6 +191,116 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         with:
           build_args: --build-arg MY_ARG=value
+```
+
+## Native Multi-Architecture Builds (AWS ECR)
+
+For faster, more reliable multi-architecture builds, you can use native runners for each
+architecture instead of QEMU emulation. Each architecture builds on its own dedicated runner,
+then a final job creates a Docker manifest list combining them.
+
+This follows the pattern described in the
+[AWS ECR documentation](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-multi-architecture-image.html).
+
+```yaml
+name: Native Multi-Arch Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-arm64:
+    permissions:
+      contents: write
+      id-token: write
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 50
+          fetch-tags: true
+      - name: Tag
+        uses: martoc/action-tag@v0
+        with:
+          skip-push: true
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions
+          aws-region: us-east-2
+      - name: Build & Push ARM64 Image
+        uses: martoc/action-container-build@v0
+        with:
+          registry: aws
+          region: us-east-2
+          repository_name: repo
+          aws_account_id: 123456789012
+          platforms: linux/arm64
+          mode: multi-arch
+
+  build-amd64:
+    permissions:
+      contents: write
+      id-token: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 50
+          fetch-tags: true
+      - name: Tag
+        uses: martoc/action-tag@v0
+        with:
+          skip-push: true
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions
+          aws-region: us-east-2
+      - name: Build & Push AMD64 Image
+        uses: martoc/action-container-build@v0
+        with:
+          registry: aws
+          region: us-east-2
+          repository_name: repo
+          aws_account_id: 123456789012
+          platforms: linux/amd64
+          mode: multi-arch
+
+  create-manifest:
+    permissions:
+      contents: write
+      id-token: write
+    needs: [build-arm64, build-amd64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 50
+          fetch-tags: true
+      - name: Tag
+        uses: martoc/action-tag@v0
+        with:
+          skip-push: true
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions
+          aws-region: us-east-2
+      - name: Create Manifest List
+        uses: martoc/action-container-build@v0
+        with:
+          registry: aws
+          region: us-east-2
+          repository_name: repo
+          aws_account_id: 123456789012
+          platforms: linux/arm64,linux/amd64
+          mode: manifest
 ```
 
 ## Registry-Specific Requirements
