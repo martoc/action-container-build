@@ -32,6 +32,13 @@ inputs:
     description: "Build arguments"
     required: false
     default: ""
+  mode:
+    description: >-
+      Build mode: 'build' (default), 'multi-arch' (native single-arch build
+      with arch-suffixed tag), 'manifest' (create manifest list from
+      arch-suffixed images)
+    required: false
+    default: "build"
 runs:
   using: "composite"
   steps:
@@ -100,6 +107,12 @@ runs:
           --label "org.opencontainers.image.licenses=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG_NAME}/LICENSE"
         )
 
+        MODE="${{ inputs.mode }}"
+        if [ "${MODE}" != "build" ] && [ "${MODE}" != "multi-arch" ] && [ "${MODE}" != "manifest" ]; then
+          echo "Invalid mode: ${MODE}. Valid values are: build, multi-arch, manifest"
+          exit 1
+        fi
+
         if [ -n "${{ inputs.registry }}" ]; then
           REGISTRY="${{ inputs.registry }}"
         fi
@@ -118,6 +131,18 @@ runs:
 
         if [ -n "${{ inputs.aws_account_id }}" ]; then
           ACCOUNT_ID="${{ inputs.aws_account_id }}"
+        fi
+
+        if [ "${MODE}" != "build" ] && [ "${REGISTRY}" != "aws" ]; then
+          echo "Mode '${MODE}' is only supported with the 'aws' registry"
+          exit 1
+        fi
+
+        if [ "${MODE}" = "multi-arch" ]; then
+          if [[ "${PLATFORMS}" == *","* ]]; then
+            echo "Mode 'multi-arch' requires a single platform (e.g. linux/arm64), got: ${PLATFORMS}"
+            exit 1
+          fi
         fi
 
         if [ "${REGISTRY}" = "docker.io" ]; then
@@ -171,8 +196,18 @@ runs:
                 exit 1
               fi
               aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
-              TAGS="--tag $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} --tag $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:latest"
-              PUSH_TAGS=($ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}:latest)
+              IMAGE_BASE="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}"
+              if [ "${MODE}" = "multi-arch" ]; then
+                ARCH=$(echo "${PLATFORMS}" | cut -d'/' -f2)
+                TAGS="--tag ${IMAGE_BASE}:${TAG_VERSION}-${ARCH}"
+                PUSH_TAGS=(${IMAGE_BASE}:${TAG_VERSION}-${ARCH})
+              elif [ "${MODE}" = "manifest" ]; then
+                TAGS=""
+                PUSH_TAGS=()
+              else
+                TAGS="--tag ${IMAGE_BASE}:${TAG_VERSION} --tag ${IMAGE_BASE}:latest"
+                PUSH_TAGS=(${IMAGE_BASE}:${TAG_VERSION} ${IMAGE_BASE}:latest)
+              fi
             else
               echo "Unknown registry: ${REGISTRY}. Valid values are:"
               echo "  - docker.io"
@@ -182,30 +217,51 @@ runs:
             fi
           fi
         fi
-        MULTI_PLATFORM="yes"
-        if [[ "$PLATFORMS" == *","* ]]; then
-          MULTI_PLATFORM="yes"
-        else
-          TARGET_OS=$(echo "$PLATFORMS" | cut -d'/' -f1)
-          TARGET_ARCH=$(echo "$PLATFORMS" | cut -d'/' -f2)
-          CURRENT_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-          CURRENT_ARCH=$(uname -m)
-          case $CURRENT_ARCH in
-            x86_64) CURRENT_ARCH="amd64" ;;
-            aarch64) CURRENT_ARCH="arm64" ;;
-            i386|i686) CURRENT_ARCH="386" ;;
-          esac
-          if [ "$TARGET_OS" == "$CURRENT_OS" ] && [ "$TARGET_ARCH" == "$CURRENT_ARCH" ]; then
-            MULTI_PLATFORM="no"
-          fi
-        fi
-
-        if [ "$MULTI_PLATFORM" = "yes" ]; then
-          docker buildx create --use
-          docker buildx build --push "${LABEL_ARGS[@]}" ${BUILD_ARGS} ${{ inputs.build_args }} --progress plain --file ${DOCKERFILE} --platform $PLATFORMS $TAGS $WORKDIR
-        else
+        if [ "${MODE}" = "manifest" ]; then
+          export DOCKER_CLI_EXPERIMENTAL=enabled
+          IFS=',' read -ra ARCH_LIST <<< "${PLATFORMS}"
+          MANIFEST_AMENDS_VERSION=""
+          MANIFEST_AMENDS_LATEST=""
+          for PLATFORM_ENTRY in "${ARCH_LIST[@]}"; do
+            ARCH=$(echo "${PLATFORM_ENTRY}" | cut -d'/' -f2)
+            MANIFEST_AMENDS_VERSION="${MANIFEST_AMENDS_VERSION} ${IMAGE_BASE}:${TAG_VERSION}-${ARCH}"
+            MANIFEST_AMENDS_LATEST="${MANIFEST_AMENDS_LATEST} ${IMAGE_BASE}:${TAG_VERSION}-${ARCH}"
+          done
+          docker manifest create ${IMAGE_BASE}:${TAG_VERSION} ${MANIFEST_AMENDS_VERSION}
+          docker manifest push ${IMAGE_BASE}:${TAG_VERSION}
+          docker manifest create ${IMAGE_BASE}:latest ${MANIFEST_AMENDS_LATEST}
+          docker manifest push ${IMAGE_BASE}:latest
+        elif [ "${MODE}" = "multi-arch" ]; then
           docker build --no-cache "${LABEL_ARGS[@]}" ${BUILD_ARGS} ${{ inputs.build_args }} --file ${DOCKERFILE} $TAGS $WORKDIR
-          for IMAGE_TAG in $PUSH_TAGS; do
+          for IMAGE_TAG in "${PUSH_TAGS[@]}"; do
             docker push $IMAGE_TAG
           done
+        else
+          MULTI_PLATFORM="yes"
+          if [[ "$PLATFORMS" == *","* ]]; then
+            MULTI_PLATFORM="yes"
+          else
+            TARGET_OS=$(echo "$PLATFORMS" | cut -d'/' -f1)
+            TARGET_ARCH=$(echo "$PLATFORMS" | cut -d'/' -f2)
+            CURRENT_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+            CURRENT_ARCH=$(uname -m)
+            case $CURRENT_ARCH in
+              x86_64) CURRENT_ARCH="amd64" ;;
+              aarch64) CURRENT_ARCH="arm64" ;;
+              i386|i686) CURRENT_ARCH="386" ;;
+            esac
+            if [ "$TARGET_OS" == "$CURRENT_OS" ] && [ "$TARGET_ARCH" == "$CURRENT_ARCH" ]; then
+              MULTI_PLATFORM="no"
+            fi
+          fi
+
+          if [ "$MULTI_PLATFORM" = "yes" ]; then
+            docker buildx create --use
+            docker buildx build --push "${LABEL_ARGS[@]}" ${BUILD_ARGS} ${{ inputs.build_args }} --progress plain --file ${DOCKERFILE} --platform $PLATFORMS $TAGS $WORKDIR
+          else
+            docker build --no-cache "${LABEL_ARGS[@]}" ${BUILD_ARGS} ${{ inputs.build_args }} --file ${DOCKERFILE} $TAGS $WORKDIR
+            for IMAGE_TAG in "${PUSH_TAGS[@]}"; do
+              docker push $IMAGE_TAG
+            done
+          fi
         fi
