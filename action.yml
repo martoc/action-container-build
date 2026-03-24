@@ -35,8 +35,8 @@ inputs:
   mode:
     description: >-
       Build mode: 'build' (default), 'multi-arch' (native single-arch build
-      with arch-suffixed tag), 'manifest' (create manifest list from
-      arch-suffixed images)
+      with dot-separated arch tag, e.g. 1.0.0.amd64), 'manifest' (create
+      manifest list from dot-separated arch images)
     required: false
     default: "build"
 runs:
@@ -199,8 +199,8 @@ runs:
               IMAGE_BASE="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/${REPOSITORY_NAME}/${NAME}"
               if [ "${MODE}" = "multi-arch" ]; then
                 ARCH=$(echo "${PLATFORMS}" | cut -d'/' -f2)
-                TAGS="--tag ${IMAGE_BASE}:${TAG_VERSION}-${ARCH}"
-                PUSH_TAGS=(${IMAGE_BASE}:${TAG_VERSION}-${ARCH})
+                TAGS="--tag ${IMAGE_BASE}:${TAG_VERSION}.${ARCH}"
+                PUSH_TAGS=(${IMAGE_BASE}:${TAG_VERSION}.${ARCH})
               elif [ "${MODE}" = "manifest" ]; then
                 TAGS=""
                 PUSH_TAGS=()
@@ -224,8 +224,8 @@ runs:
           MANIFEST_AMENDS_LATEST=""
           for PLATFORM_ENTRY in "${ARCH_LIST[@]}"; do
             ARCH=$(echo "${PLATFORM_ENTRY}" | cut -d'/' -f2)
-            MANIFEST_AMENDS_VERSION="${MANIFEST_AMENDS_VERSION} ${IMAGE_BASE}:${TAG_VERSION}-${ARCH}"
-            MANIFEST_AMENDS_LATEST="${MANIFEST_AMENDS_LATEST} ${IMAGE_BASE}:${TAG_VERSION}-${ARCH}"
+            MANIFEST_AMENDS_VERSION="${MANIFEST_AMENDS_VERSION} ${IMAGE_BASE}:${TAG_VERSION}.${ARCH}"
+            MANIFEST_AMENDS_LATEST="${MANIFEST_AMENDS_LATEST} ${IMAGE_BASE}:${TAG_VERSION}.${ARCH}"
           done
           docker manifest create ${IMAGE_BASE}:${TAG_VERSION} ${MANIFEST_AMENDS_VERSION}
           docker manifest push ${IMAGE_BASE}:${TAG_VERSION}

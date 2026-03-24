@@ -40,7 +40,7 @@ Before using this action, ensure that you have the following secrets configured 
 | `gcp_project_id` | Google Cloud Project ID | No | `""` |
 | `platforms` | Platforms to build for (e.g., `linux/amd64`, `linux/arm64`) | No | `linux/arm64,linux/amd64` |
 | `build_args` | Additional build arguments to pass to docker build | No | `""` |
-| `mode` | Build mode: `build` (default), `multi-arch` (native single-arch build with arch-suffixed tag), `manifest` (create manifest list from arch-suffixed images). `multi-arch` and `manifest` are AWS ECR only. | No | `"build"` |
+| `mode` | Build mode: `build` (default), `multi-arch` (native single-arch build with dot-separated arch tag, e.g. `1.0.0.amd64`), `manifest` (create manifest list from dot-separated arch images). `multi-arch` and `manifest` are AWS ECR only. | No | `"build"` |
 
 ### Environment Variables
 
@@ -302,6 +302,20 @@ jobs:
           platforms: linux/arm64,linux/amd64
           mode: manifest
 ```
+
+## Tag Format for Multi-Architecture Builds
+
+When using `multi-arch` mode, architecture-specific images are tagged using a dot (`.`) separator
+between the version and the architecture, e.g. `1.2.3.arm64` or `0.0.0-rc.e82285e.amd64`.
+
+This follows SemVer conventions as closely as Docker tag syntax allows. In SemVer, build metadata
+(such as architecture) should be appended with `+` (e.g. `1.0.0-rc.abc123+amd64`), but Docker
+image tags do not support the `+` character. Using `.` as the separator keeps the architecture
+clearly distinguished from pre-release identifiers (which use `-`) whilst remaining compatible
+with Docker and OCI registries.
+
+The `manifest` mode then combines these dot-separated arch tags into a single manifest list
+tagged with the base version (e.g. `1.2.3`) and `latest`.
 
 ## Registry-Specific Requirements
 
