@@ -39,6 +39,13 @@ inputs:
       arch-suffixed images)
     required: false
     default: "build"
+  name:
+    description: >-
+      Override the published image name. Defaults to the repo name (minus
+      any docker-/container- prefix) when unset -- set this when the repo
+      name doesn't match the image name it's actually meant to publish as.
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -57,10 +64,14 @@ runs:
           exit 1
         fi
 
-        NAME="${{ github.repository }}"
-        NAME="${NAME#*/}"
-        NAME="${NAME#docker-}"
-        NAME="${NAME#container-}"
+        if [ -n "${{ inputs.name }}" ]; then
+          NAME="${{ inputs.name }}"
+        else
+          NAME="${{ github.repository }}"
+          NAME="${NAME#*/}"
+          NAME="${NAME#docker-}"
+          NAME="${NAME#container-}"
+        fi
 
         if [ -z "${PLATFORMS}" ]; then
           PLATFORMS="${{ inputs.platforms }}"
