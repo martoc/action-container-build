@@ -339,6 +339,14 @@ runs:
             # Version tags are immutable on ECR; ACR has no registry-wide setting, so
             # the tag is locked after the push (ADR 0006 in nodals-ai/documentation).
             az acr repository update --name "${AZURE_REGISTRY%%.*}" --image "${REPOSITORY_NAME}/${NAME}:${TAG_VERSION}" --write-enabled false --output none
+            # The CLI reports nothing when the identity lacks the metadata/write action
+            # (AcrPush alone does not carry it); read the attribute back so an unlocked tag
+            # fails the job instead of passing silently.
+            LOCKED=$(az acr repository show-tags --name "${AZURE_REGISTRY%%.*}" --repository "${REPOSITORY_NAME}/${NAME}" --detail --query "[?name=='${TAG_VERSION}'].changeableAttributes.writeEnabled | [0]" --output tsv)
+            if [ "${LOCKED}" != "false" ]; then
+              echo "Tag ${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} is still writable on ${AZURE_REGISTRY} (writeEnabled=${LOCKED}); the identity needs registries/metadata/write"
+              exit 1
+            fi
           fi
         elif [ "${MODE}" = "multi-arch" ]; then
           docker build --no-cache "${LABEL_ARGS[@]}" ${BUILD_ARGS} ${{ inputs.build_args }} --file ${DOCKERFILE} $TAGS $WORKDIR
