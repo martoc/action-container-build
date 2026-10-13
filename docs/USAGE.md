@@ -27,20 +27,35 @@ Before using this action, ensure that you have the following secrets configured 
 * **GCP_WORKLOAD_IDENTITY_PROVIDER:** Workload identity provider for GCP authentication.
 * **GCP_SERVICE_ACCOUNT:** The email of the service account to use for GCP authentication.
 
+### Azure Container Registry
+
+No secret. The action logs in with `azure/login` through OpenID Connect as the identity named by
+`azure_client_id`: a user-assigned managed identity holding `AcrPush` on the registry, with a
+federated identity credential that trusts the repository's GitHub Actions tokens (for `nodals-ai`
+that is `id-github-acr-push`, created by `terraform-azure-deployments-configuration`, whose
+federated credentials match every repository of the organisation on `main` and `release/*`).
+The job needs `permissions: id-token: write`. The tenant and subscription ids are not secret and
+can be organisation variables.
+
 ## Inputs
 
 ### Action Inputs
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `registry` | Registry to push the container to. Valid values: `docker.io`, `gcp`, `aws` | No | `docker.io` |
+| `registry` | Registry to push the container to. Valid values: `docker.io`, `gcp`, `aws`, `azure` | No | `docker.io` |
 | `region` | Region to push the container to. Valid for GCP or AWS regions | No | `""` |
 | `repository_name` | Repository name | No | `""` |
 | `aws_account_id` | AWS Account ID | No | `""` |
 | `gcp_project_id` | Google Cloud Project ID | No | `""` |
+| `azure_registry` | Login server of the Azure Container Registry (e.g. `nodalsai.azurecr.io`). Required with `registry: azure` and with `mirror_registry: azure` | No | `""` |
+| `azure_client_id` | Client id of the Entra ID identity the workflow logs in as through OIDC. Required with `registry: azure` and with `mirror_registry: azure` | No | `""` |
+| `azure_tenant_id` | Entra ID tenant of that identity | No | `""` |
+| `azure_subscription_id` | Azure subscription holding the registry | No | `""` |
+| `mirror_registry` | In `manifest` mode only: a second registry that receives a copy of the manifest list just pushed, under the same repository and tags. Valid values: `azure`. The copy is made with `docker buildx imagetools create` from the primary registry; nothing is rebuilt, and the version tag is locked on the mirror after the copy | No | `""` |
 | `platforms` | Platforms to build for (e.g., `linux/amd64`, `linux/arm64`) | No | `linux/arm64,linux/amd64` |
 | `build_args` | Additional build arguments to pass to docker build | No | `""` |
-| `mode` | Build mode: `build` (default), `multi-arch` (native single-arch build with arch-suffixed tag), `manifest` (create manifest list from arch-suffixed images). `multi-arch` and `manifest` are AWS ECR only. | No | `"build"` |
+| `mode` | Build mode: `build` (default), `multi-arch` (native single-arch build with arch-suffixed tag), `manifest` (create manifest list from arch-suffixed images). `multi-arch` and `manifest` are for the `aws` and `azure` registries. | No | `"build"` |
 
 ### Environment Variables
 
@@ -325,6 +340,44 @@ jobs:
 * `repository_name` input is required
 * `gcp_project_id` input is required
 * GCP authentication must be configured (e.g., using `google-github-actions/auth`)
+
+### Azure Container Registry
+
+* `registry` input must be set to `azure`
+* `azure_registry` input is required (the login server); `region` is not used, the registry's
+  replicas answer the one login server
+* `repository_name` input is required
+* `azure_client_id`, `azure_tenant_id` and `azure_subscription_id` identify the identity the
+  action logs in as; the job needs `permissions: id-token: write`
+* Images are tagged `<azure_registry>/<repository_name>/<name>:<tag>`, the same layout as ECR
+
+### Mirroring a manifest list to Azure
+
+In `manifest` mode, `mirror_registry: azure` copies the manifest list just created in the
+primary registry to the Azure registry, with the same `azure_*` inputs as above:
+
+```yaml
+- name: Create Manifest List
+  uses: martoc/action-container-build@v0
+  with:
+    platforms: linux/arm64,linux/amd64
+    registry: aws
+    region: eu-central-1
+    repository_name: data-platform
+    aws_account_id: "051942114282"
+    mode: manifest
+    mirror_registry: azure
+    azure_registry: nodalsai.azurecr.io
+    azure_client_id: ${{ vars.AZURE_ACR_PUSH_CLIENT_ID }}
+    azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+    azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+```
+
+Both registries then hold identical digests for `<repository_name>/<name>:<TAG_VERSION>` and
+`:latest`. The version tag is locked on the Azure side (`az acr repository update
+--write-enabled false`), the counterpart of ECR's immutable tags. A registry that is not `aws`
+cannot be the primary of a mirror: `manifest` mode exists for `aws` and `azure` only, and
+mirroring Azure to itself is refused.
 
 ## Container Labels
 
