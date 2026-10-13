@@ -5,7 +5,7 @@ description: |
 author: martoc
 inputs:
   registry:
-    description: "Registry to push the container to (default: docker.io) valid values: docker.io, gcp, aws"
+    description: "Registry to push the container to (default: docker.io) valid values: docker.io, gcp, aws, azure"
     required: false
     default: "docker.io"
   region:
@@ -22,6 +22,36 @@ inputs:
     default: ""
   gcp_project_id:
     description: "Google Cloud Project ID"
+    required: false
+    default: ""
+  azure_registry:
+    description: >-
+      Login server of the Azure Container Registry (for example
+      nodalsai.azurecr.io). Required with registry 'azure' and with
+      mirror_registry 'azure'.
+    required: false
+    default: ""
+  azure_client_id:
+    description: >-
+      Client id of the Entra ID identity the workflow logs in as through OIDC
+      (a user-assigned managed identity with AcrPush, federated to GitHub
+      Actions). Required with registry 'azure' and with mirror_registry 'azure'.
+    required: false
+    default: ""
+  azure_tenant_id:
+    description: "Entra ID tenant of that identity"
+    required: false
+    default: ""
+  azure_subscription_id:
+    description: "Azure subscription holding the registry"
+    required: false
+    default: ""
+  mirror_registry:
+    description: >-
+      In 'manifest' mode only: a second registry that receives a copy of the
+      manifest list just created, so one build publishes to two clouds in the
+      same job. Valid values: '' (none), 'azure'. The copy is made with
+      docker buildx imagetools from the primary registry; nothing is rebuilt.
     required: false
     default: ""
   platforms:
@@ -54,6 +84,13 @@ runs:
       with:
         version: 499.0.0
       if: ${{ inputs.registry == 'gcp' }}
+    - name: "Azure login"
+      uses: azure/login@v3
+      with:
+        client-id: ${{ inputs.azure_client_id }}
+        tenant-id: ${{ inputs.azure_tenant_id }}
+        subscription-id: ${{ inputs.azure_subscription_id }}
+      if: ${{ inputs.registry == 'azure' || inputs.mirror_registry == 'azure' }}
     - name: Container Build
       shell: bash
       env:
@@ -144,10 +181,40 @@ runs:
           ACCOUNT_ID="${{ inputs.aws_account_id }}"
         fi
 
-        if [ "${MODE}" != "build" ] && [ "${REGISTRY}" != "aws" ]; then
-          echo "Mode '${MODE}' is only supported with the 'aws' registry"
+        if [ "${MODE}" != "build" ] && [ "${REGISTRY}" != "aws" ] && [ "${REGISTRY}" != "azure" ]; then
+          echo "Mode '${MODE}' is only supported with the 'aws' and 'azure' registries"
           exit 1
         fi
+
+        MIRROR_REGISTRY="${{ inputs.mirror_registry }}"
+        if [ -n "${MIRROR_REGISTRY}" ]; then
+          if [ "${MODE}" != "manifest" ]; then
+            echo "mirror_registry is only supported in 'manifest' mode"
+            exit 1
+          fi
+          if [ "${MIRROR_REGISTRY}" != "azure" ]; then
+            echo "Unknown mirror_registry: ${MIRROR_REGISTRY}. Valid values are: azure"
+            exit 1
+          fi
+          if [ "${REGISTRY}" = "azure" ]; then
+            echo "mirror_registry 'azure' cannot mirror the 'azure' registry to itself"
+            exit 1
+          fi
+        fi
+
+        AZURE_REGISTRY="${{ inputs.azure_registry }}"
+        azure_acr_login() {
+          if [ -z "${AZURE_REGISTRY}" ]; then
+            echo "azure_registry must be set when using the 'azure' registry"
+            exit 1
+          fi
+          if [ -z "${{ inputs.azure_client_id }}" ]; then
+            echo "azure_client_id must be set when using the 'azure' registry"
+            exit 1
+          fi
+          # az acr login takes the registry name, the first label of its login server
+          az acr login --name "${AZURE_REGISTRY%%.*}"
+        }
 
         if [ "${MODE}" = "multi-arch" ]; then
           if [[ "${PLATFORMS}" == *","* ]]; then
@@ -219,11 +286,30 @@ runs:
                 TAGS="--tag ${IMAGE_BASE}:${TAG_VERSION} --tag ${IMAGE_BASE}:latest"
                 PUSH_TAGS=(${IMAGE_BASE}:${TAG_VERSION} ${IMAGE_BASE}:latest)
               fi
+            elif [ "${REGISTRY}" = "azure" ]; then
+              if  [ -z "${REPOSITORY_NAME}" ]; then
+                echo "REPOSITORY_NAME must be set when using 'azure' registry"
+                exit 1
+              fi
+              azure_acr_login
+              IMAGE_BASE="${AZURE_REGISTRY}/${REPOSITORY_NAME}/${NAME}"
+              if [ "${MODE}" = "multi-arch" ]; then
+                ARCH=$(echo "${PLATFORMS}" | cut -d'/' -f2)
+                TAGS="--tag ${IMAGE_BASE}:${TAG_VERSION}-${ARCH}"
+                PUSH_TAGS=(${IMAGE_BASE}:${TAG_VERSION}-${ARCH})
+              elif [ "${MODE}" = "manifest" ]; then
+                TAGS=""
+                PUSH_TAGS=()
+              else
+                TAGS="--tag ${IMAGE_BASE}:${TAG_VERSION} --tag ${IMAGE_BASE}:latest"
+                PUSH_TAGS=(${IMAGE_BASE}:${TAG_VERSION} ${IMAGE_BASE}:latest)
+              fi
             else
               echo "Unknown registry: ${REGISTRY}. Valid values are:"
               echo "  - docker.io"
               echo "  - gcp"
               echo "  - aws"
+              echo "  - azure"
               exit 1
             fi
           fi
@@ -242,6 +328,18 @@ runs:
           docker manifest push ${IMAGE_BASE}:${TAG_VERSION}
           docker manifest create ${IMAGE_BASE}:latest ${MANIFEST_AMENDS_LATEST}
           docker manifest push ${IMAGE_BASE}:latest
+          if [ "${MIRROR_REGISTRY}" = "azure" ]; then
+            # Copy the manifest list and every blob it references to the Azure registry
+            # under the same repository and tags. imagetools create reads from the
+            # primary registry (already logged in above) and pushes to the mirror; the
+            # image is not rebuilt, so both registries hold identical digests.
+            azure_acr_login
+            MIRROR_BASE="${AZURE_REGISTRY}/${REPOSITORY_NAME}/${NAME}"
+            docker buildx imagetools create --tag "${MIRROR_BASE}:${TAG_VERSION}" --tag "${MIRROR_BASE}:latest" "${IMAGE_BASE}:${TAG_VERSION}"
+            # Version tags are immutable on ECR; ACR has no registry-wide setting, so
+            # the tag is locked after the push (ADR 0006 in nodals-ai/documentation).
+            az acr repository update --name "${AZURE_REGISTRY%%.*}" --image "${REPOSITORY_NAME}/${NAME}:${TAG_VERSION}" --write-enabled false --output none
+          fi
         elif [ "${MODE}" = "multi-arch" ]; then
           docker build --no-cache "${LABEL_ARGS[@]}" ${BUILD_ARGS} ${{ inputs.build_args }} --file ${DOCKERFILE} $TAGS $WORKDIR
           for IMAGE_TAG in "${PUSH_TAGS[@]}"; do
