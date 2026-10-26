@@ -2,11 +2,11 @@
 
 # action-container-build
 
-A GitHub Action that builds and pushes container images to Docker Hub, AWS ECR, GCP Artifact Registry and Azure Container Registry. Supports multi-platform builds (linux/arm64, linux/amd64) using Docker buildx and automatically applies OCI-compliant container labels.
+A GitHub Action that builds and pushes container images to Docker Hub, AWS ECR, GCP Artifact Registry, Azure Container Registry and the GitHub Container Registry (ghcr.io). Supports multi-platform builds (linux/arm64, linux/amd64) using Docker buildx and automatically applies OCI-compliant container labels.
 
 ## Features
 
-- Multi-registry support: Docker Hub, AWS ECR, GCP Artifact Registry, Azure Container Registry
+- Multi-registry support: Docker Hub, AWS ECR, GCP Artifact Registry, Azure Container Registry, GitHub Container Registry
 - Mirroring: in `manifest` mode the finished manifest list can be copied to an Azure registry in the same job, so one build serves two clouds
 - Multi-platform builds using Docker buildx
 - Automatic OCI-compliant container labelling
@@ -22,6 +22,14 @@ A GitHub Action that builds and pushes container images to Docker Hub, AWS ECR, 
     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 ```
 
+```yaml
+# ghcr.io/<owner>/<repository>; the job needs permissions: packages: write
+- name: Build & Push Container Image
+  uses: martoc/action-container-build@v0
+  with:
+    registry: github
+```
+
 ## Documentation
 
 - [Usage Guide](./docs/USAGE.md) - Detailed usage instructions and examples
@@ -31,7 +39,7 @@ A GitHub Action that builds and pushes container images to Docker Hub, AWS ECR, 
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `registry` | Registry to push to (`docker.io`, `gcp`, `aws`, `azure`) | No | `docker.io` |
+| `registry` | Registry to push to (`docker.io`, `gcp`, `aws`, `azure`, `github`) | No | `docker.io` |
 | `region` | Region for GCP or AWS | No | `""` |
 | `repository_name` | Repository name | No | `""` |
 | `aws_account_id` | AWS Account ID | No | `""` |
@@ -40,7 +48,8 @@ A GitHub Action that builds and pushes container images to Docker Hub, AWS ECR, 
 | `azure_client_id` | Client id of the identity logged in through OIDC, holding `AcrPush` | No | `""` |
 | `azure_tenant_id` | Entra ID tenant of that identity | No | `""` |
 | `azure_subscription_id` | Subscription holding the registry | No | `""` |
-| `mode` | `build`, `multi-arch` or `manifest` (`aws` and `azure` registries) | No | `build` |
+| `github_token` | Token that pushes to `ghcr.io` (`github` registry) | No | the workflow's `GITHUB_TOKEN` |
+| `mode` | `build`, `multi-arch` or `manifest` (`aws`, `azure` and `github` registries) | No | `build` |
 | `mirror_registry` | In `manifest` mode, a second registry that receives a copy of the manifest list: `azure` | No | `""` |
 | `platforms` | Build platforms | No | `linux/arm64,linux/amd64` |
 | `build_args` | Additional build arguments | No | `""` |

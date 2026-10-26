@@ -5,7 +5,9 @@ description: |
 author: martoc
 inputs:
   registry:
-    description: "Registry to push the container to (default: docker.io) valid values: docker.io, gcp, aws, azure"
+    description: >-
+      Registry to push the container to (default: docker.io) valid values:
+      docker.io, gcp, aws, azure, github
     required: false
     default: "docker.io"
   region:
@@ -46,6 +48,13 @@ inputs:
     description: "Azure subscription holding the registry"
     required: false
     default: ""
+  github_token:
+    description: >-
+      Token that pushes to the GitHub Container Registry (ghcr.io) with
+      registry 'github'. Defaults to the workflow's GITHUB_TOKEN, which needs
+      'packages: write' in the calling job.
+    required: false
+    default: ${{ github.token }}
   mirror_registry:
     description: >-
       In 'manifest' mode only: a second registry that receives a copy of the
@@ -95,6 +104,7 @@ runs:
       shell: bash
       env:
         COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        GHCR_TOKEN: ${{ inputs.github_token }}
       run: |
         if [ -z "${TAG_VERSION}" ]; then
           echo "TAG_VERSION must be set"
@@ -181,10 +191,13 @@ runs:
           ACCOUNT_ID="${{ inputs.aws_account_id }}"
         fi
 
-        if [ "${MODE}" != "build" ] && [ "${REGISTRY}" != "aws" ] && [ "${REGISTRY}" != "azure" ]; then
-          echo "Mode '${MODE}' is only supported with the 'aws' and 'azure' registries"
-          exit 1
-        fi
+        case "${MODE}/${REGISTRY}" in
+          build/* | */aws | */azure | */github) ;;
+          *)
+            echo "Mode '${MODE}' is only supported with the 'aws', 'azure' and 'github' registries"
+            exit 1
+            ;;
+        esac
 
         MIRROR_REGISTRY="${{ inputs.mirror_registry }}"
         if [ -n "${MIRROR_REGISTRY}" ]; then
@@ -304,12 +317,37 @@ runs:
                 TAGS="--tag ${IMAGE_BASE}:${TAG_VERSION} --tag ${IMAGE_BASE}:latest"
                 PUSH_TAGS=(${IMAGE_BASE}:${TAG_VERSION} ${IMAGE_BASE}:latest)
               fi
+            elif [ "${REGISTRY}" = "github" ]; then
+              if [ -z "${REPOSITORY_NAME}" ]; then
+                REPOSITORY_NAME="${NAMESPACE}"
+              fi
+              if [ -z "${GHCR_TOKEN}" ]; then
+                echo "github_token must be set when using 'github' registry"
+                exit 1
+              fi
+              echo "${GHCR_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+              # GHCR accepts only lower case repository paths; the owner and the
+              # repository name may carry capitals.
+              IMAGE_BASE="ghcr.io/${REPOSITORY_NAME}/${NAME}"
+              IMAGE_BASE="${IMAGE_BASE,,}"
+              if [ "${MODE}" = "multi-arch" ]; then
+                ARCH=$(echo "${PLATFORMS}" | cut -d'/' -f2)
+                TAGS="--tag ${IMAGE_BASE}:${TAG_VERSION}-${ARCH}"
+                PUSH_TAGS=(${IMAGE_BASE}:${TAG_VERSION}-${ARCH})
+              elif [ "${MODE}" = "manifest" ]; then
+                TAGS=""
+                PUSH_TAGS=()
+              else
+                TAGS="--tag ${IMAGE_BASE}:${TAG_VERSION} --tag ${IMAGE_BASE}:latest"
+                PUSH_TAGS=(${IMAGE_BASE}:${TAG_VERSION} ${IMAGE_BASE}:latest)
+              fi
             else
               echo "Unknown registry: ${REGISTRY}. Valid values are:"
               echo "  - docker.io"
               echo "  - gcp"
               echo "  - aws"
               echo "  - azure"
+              echo "  - github"
               exit 1
             fi
           fi
