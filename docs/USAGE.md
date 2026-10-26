@@ -3,7 +3,8 @@
 ## Overview
 
 This GitHub Action is designed to build and push container images to Docker Hub,
-AWS Elastic Container Registry (ECR), and Google Cloud Artifact Registry.
+AWS Elastic Container Registry (ECR), Google Cloud Artifact Registry, Azure Container Registry
+and the GitHub Container Registry (ghcr.io).
 It simplifies the CI/CD workflow by automating the process of tagging, building,
 and pushing container images across multiple container registries.
 
@@ -37,13 +38,20 @@ federated credentials match every repository of the organisation on `main` and `
 The job needs `permissions: id-token: write`. The tenant and subscription ids are not secret and
 can be organisation variables.
 
+### GitHub Container Registry
+
+No secret. The action logs in to `ghcr.io` as `GITHUB_ACTOR` with the workflow's `GITHUB_TOKEN`,
+so the job needs `permissions: packages: write`. Pass `github_token` only to push with another
+token, for example a personal access token with `write:packages` for a package owned by another
+account.
+
 ## Inputs
 
 ### Action Inputs
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `registry` | Registry to push the container to. Valid values: `docker.io`, `gcp`, `aws`, `azure` | No | `docker.io` |
+| `registry` | Registry to push the container to. Valid values: `docker.io`, `gcp`, `aws`, `azure`, `github` | No | `docker.io` |
 | `region` | Region to push the container to. Valid for GCP or AWS regions | No | `""` |
 | `repository_name` | Repository name | No | `""` |
 | `aws_account_id` | AWS Account ID | No | `""` |
@@ -52,10 +60,11 @@ can be organisation variables.
 | `azure_client_id` | Client id of the Entra ID identity the workflow logs in as through OIDC. Required with `registry: azure` and with `mirror_registry: azure` | No | `""` |
 | `azure_tenant_id` | Entra ID tenant of that identity | No | `""` |
 | `azure_subscription_id` | Azure subscription holding the registry | No | `""` |
+| `github_token` | Token that pushes to `ghcr.io` with `registry: github` | No | the workflow's `GITHUB_TOKEN` |
 | `mirror_registry` | In `manifest` mode only: a second registry that receives a copy of the manifest list just pushed, under the same repository and tags. Valid values: `azure`. The copy is made with `docker buildx imagetools create` from the primary registry; nothing is rebuilt, and the version tag is locked on the mirror after the copy | No | `""` |
 | `platforms` | Platforms to build for (e.g., `linux/amd64`, `linux/arm64`) | No | `linux/arm64,linux/amd64` |
 | `build_args` | Additional build arguments to pass to docker build | No | `""` |
-| `mode` | Build mode: `build` (default), `multi-arch` (native single-arch build with arch-suffixed tag), `manifest` (create manifest list from arch-suffixed images). `multi-arch` and `manifest` are for the `aws` and `azure` registries. | No | `"build"` |
+| `mode` | Build mode: `build` (default), `multi-arch` (native single-arch build with arch-suffixed tag), `manifest` (create manifest list from arch-suffixed images). `multi-arch` and `manifest` are for the `aws`, `azure` and `github` registries. | No | `"build"` |
 
 ### Environment Variables
 
@@ -75,7 +84,7 @@ The following environment variables can be used to customize the build:
 ## Example
 
 Here are examples of how to use this GitHub Action to build and push container
-images to Docker Hub, AWS ECR, and GCP Artifact Registry.
+images to Docker Hub, AWS ECR, GCP Artifact Registry and the GitHub Container Registry.
 
 ```yaml
 name: Integration Tests
@@ -162,6 +171,25 @@ jobs:
           region: europe-west2
           repository_name: repository
           gcp_project_id: project-id
+
+  github:
+    permissions:
+      contents: write
+      packages: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 50
+          fetch-tags: true
+      - name: Tag
+        uses: martoc/action-tag@v0
+        with:
+          skip-push: true
+      - name: Build & Push Container Image
+        uses: martoc/action-container-build@v0
+        with:
+          registry: github
 
   multi-platform:
     permissions:
@@ -350,6 +378,18 @@ jobs:
 * `azure_client_id`, `azure_tenant_id` and `azure_subscription_id` identify the identity the
   action logs in as; the job needs `permissions: id-token: write`
 * Images are tagged `<azure_registry>/<repository_name>/<name>:<tag>`, the same layout as ECR
+
+### GitHub Container Registry
+
+* `registry` input must be set to `github`
+* `repository_name` is the namespace and defaults to the repository owner; a value such as
+  `my-org/images` nests the image one level deeper
+* Images are tagged `ghcr.io/<repository_name>/<name>:<tag>`, lower-cased because GHCR rejects
+  capitals
+* The job needs `permissions: packages: write`; the default `github_token` is the workflow's
+  `GITHUB_TOKEN`
+* A new package is private for a private repository, and the `org.opencontainers.image.source`
+  label links it to the repository, so the repository's workflows keep write access
 
 ### Mirroring a manifest list to Azure
 
