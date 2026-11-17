@@ -62,6 +62,7 @@ account.
 | `azure_subscription_id` | Azure subscription holding the registry | No | `""` |
 | `github_token` | Token that pushes to `ghcr.io` with `registry: github` | No | the workflow's `GITHUB_TOKEN` |
 | `mirror_registry` | In `manifest` mode only: a second registry that receives a copy of the manifest list just pushed, under the same repository and tags. Valid values: `azure`. The copy is made with `docker buildx imagetools create` from the primary registry; nothing is rebuilt, and the version tag is locked on the mirror after the copy | No | `""` |
+| `sign` | In `manifest` mode only: `true` signs the manifest list (and its mirror) with cosign, keyless, with the job's GitHub OIDC identity. The job needs `id-token: write`. The signature goes to the public Sigstore transparency log, which names the repository and workflow, so use it for public repositories. Verify with `cosign verify <image>@<digest> --certificate-identity-regexp '^https://github.com/<owner>/<repo>/' --certificate-oidc-issuer https://token.actions.githubusercontent.com` | No | `"false"` |
 | `platforms` | Platforms to build for (e.g., `linux/amd64`, `linux/arm64`) | No | `linux/arm64,linux/amd64` |
 | `build_args` | Additional build arguments to pass to docker build | No | `""` |
 | `mode` | Build mode: `build` (default), `multi-arch` (native single-arch build with arch-suffixed tag), `manifest` (create manifest list from arch-suffixed images). `multi-arch` and `manifest` are for the `aws`, `azure` and `github` registries. | No | `"build"` |
