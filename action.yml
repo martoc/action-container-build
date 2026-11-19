@@ -78,6 +78,16 @@ inputs:
       arch-suffixed images)
     required: false
     default: "build"
+  sign:
+    description: >-
+      In 'manifest' mode only: sign the manifest list with cosign, keyless,
+      with the job's GitHub OIDC identity, so users can verify the image came
+      from this repository's workflow. The job needs 'id-token: write'. The
+      signature is recorded in the public Sigstore transparency log, which
+      names the repository and workflow, so enable it only for public
+      repositories.
+    required: false
+    default: "false"
   name:
     description: >-
       Override the published image name. Defaults to the repo name (minus
@@ -100,6 +110,9 @@ runs:
         tenant-id: ${{ inputs.azure_tenant_id }}
         subscription-id: ${{ inputs.azure_subscription_id }}
       if: ${{ inputs.registry == 'azure' || inputs.mirror_registry == 'azure' }}
+    - name: "Install cosign"
+      uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+      if: ${{ inputs.sign == 'true' && inputs.mode == 'manifest' }}
     - name: Container Build
       shell: bash
       env:
@@ -200,6 +213,11 @@ runs:
         esac
 
         MIRROR_REGISTRY="${{ inputs.mirror_registry }}"
+        SIGN="${{ inputs.sign }}"
+        if [ "${SIGN}" = "true" ] && [ "${MODE}" != "manifest" ]; then
+          echo "sign is only supported in 'manifest' mode"
+          exit 1
+        fi
         if [ -n "${MIRROR_REGISTRY}" ]; then
           if [ "${MODE}" != "manifest" ]; then
             echo "mirror_registry is only supported in 'manifest' mode"
@@ -366,6 +384,13 @@ runs:
           docker manifest push ${IMAGE_BASE}:${TAG_VERSION}
           docker manifest create ${IMAGE_BASE}:latest ${MANIFEST_AMENDS_LATEST}
           docker manifest push ${IMAGE_BASE}:latest
+          if [ "${SIGN}" = "true" ]; then
+            # Keyless: the certificate names this workflow run through GitHub OIDC. The digest is
+            # signed, not the tag, and the mirror below holds the same digest.
+            DIGEST=$(docker buildx imagetools inspect "${IMAGE_BASE}:${TAG_VERSION}" \
+              --format '{{json .Manifest.Digest}}' | tr -d '"')
+            cosign sign --yes "${IMAGE_BASE}@${DIGEST}"
+          fi
           if [ "${MIRROR_REGISTRY}" = "azure" ]; then
             # Copy the manifest list and every blob it references to the Azure registry
             # under the same repository and tags. imagetools create reads from the
@@ -384,6 +409,9 @@ runs:
             if [ "${LOCKED}" != "false" ]; then
               echo "Tag ${REPOSITORY_NAME}/${NAME}:${TAG_VERSION} is still writable on ${AZURE_REGISTRY} (writeEnabled=${LOCKED}); the identity needs registries/metadata/write"
               exit 1
+            fi
+            if [ "${SIGN}" = "true" ]; then
+              cosign sign --yes "${MIRROR_BASE}@${DIGEST}"
             fi
           fi
         elif [ "${MODE}" = "multi-arch" ]; then

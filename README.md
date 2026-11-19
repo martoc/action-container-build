@@ -51,6 +51,7 @@ A GitHub Action that builds and pushes container images to Docker Hub, AWS ECR, 
 | `github_token` | Token that pushes to `ghcr.io` (`github` registry) | No | the workflow's `GITHUB_TOKEN` |
 | `mode` | `build`, `multi-arch` or `manifest` (`aws`, `azure` and `github` registries) | No | `build` |
 | `mirror_registry` | In `manifest` mode, a second registry that receives a copy of the manifest list: `azure` | No | `""` |
+| `sign` | In `manifest` mode, `true` signs the manifest list with cosign, keyless (needs `id-token: write`; public repositories) | No | `"false"` |
 | `platforms` | Build platforms | No | `linux/arm64,linux/amd64` |
 | `build_args` | Additional build arguments | No | `""` |
 
